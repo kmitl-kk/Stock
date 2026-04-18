@@ -1,0 +1,31 @@
+name: Apple Stock Checker Bot
+
+on:
+  schedule:
+    # รันทุกนาทีที่ 0 ของทุกชั่วโมง (UTC)
+    - cron: '0 * * * *'
+  workflow_dispatch: # ปุ่มกดรันเองได้จากหน้าเว็บ
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Run script
+        env:
+          # เชื่อมโยง Secrets กับ Environment Variables ในโค้ด
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+        run: python main.py
