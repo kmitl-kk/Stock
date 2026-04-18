@@ -8,26 +8,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # ใช้ Container ของ Playwright โดยตรงเพื่อตัดปัญหาเรื่อง Library ในเครื่อง GitHub
+    container: mcr.microsoft.com/playwright/python:v1.42.0-jammy 
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Install Playwright Browsers
-        run: |
-          # แก้ไขปัญหา libasound2 ใน Ubuntu 24.04
-          sudo apt-get update
-          sudo apt-get install -y libasound2t64
-          python -m playwright install --with-deps chromium
 
       - name: Run script
         env:
