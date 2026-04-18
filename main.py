@@ -10,60 +10,75 @@ import os
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
 
-PART_NUMBERS = [
-    "MU9D3TH/A",  # เพิ่มสินค้าได้
-]
+PROXY = os.getenv("PROXY")  # เช่น http://user:pass@host:port
 
+PART_NUMBERS = ["MU9D3TH/A"]
 ZIP_CODE = "10330"
 
 # =========================
-# LINE NOTIFY
+# LINE
 # =========================
 def send_line_bot(message):
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
         print("❌ Missing LINE config")
         return
 
-    try:
-        requests.post(
-            "https://api.line.me/v2/bot/message/push",
-            headers={
-                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "to": LINE_USER_ID,
-                "messages": [{"type": "text", "text": message}]
-            },
-            timeout=10
-        )
-    except Exception as e:
-        print("LINE error:", e)
+    res = requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers={
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "to": LINE_USER_ID,
+            "messages": [{"type": "text", "text": message}]
+        },
+        timeout=10
+    )
+
+    print("LINE:", res.status_code, res.text)
+
 
 # =========================
-# FETCH STOCK
+# SESSION
 # =========================
-def fetch_stock(session, part_number):
-    url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?parts.0={part_number}&location={ZIP_CODE}"
+def create_session():
+    session = requests.Session()
 
-    headers = {
+    if PROXY:
+        session.proxies.update({
+            "http": PROXY,
+            "https": PROXY
+        })
+        print("🌐 Using proxy")
+
+    session.headers.update({
         "User-Agent": random.choice([
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
         ]),
         "Accept": "application/json",
         "Referer": "https://www.apple.com/",
-    }
+    })
 
-    # retry + backoff
+    return session
+
+
+# =========================
+# FETCH
+# =========================
+def fetch_stock(session, part):
+    url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?parts.0={part}&location={ZIP_CODE}"
+
     for attempt in range(5):
         try:
-            res = session.get(url, headers=headers, timeout=10)
+            res = session.get(url, timeout=15)
+
+            print(f"[{part}] status:", res.status_code)
 
             if res.status_code == 200:
                 return res.json()
 
-            print(f"⚠️ {part_number} status {res.status_code}")
             time.sleep(5 * (attempt + 1))
 
         except Exception as e:
@@ -72,20 +87,21 @@ def fetch_stock(session, part_number):
 
     return None
 
-# =========================
-# MAIN CHECK
-# =========================
-def check_stock():
-    session = requests.Session()
 
-    # warm up cookie (สำคัญ)
+# =========================
+# MAIN
+# =========================
+def main():
+    session = create_session()
+
+    # warm up cookie
     try:
         session.get("https://www.apple.com/th-edu/shop", timeout=10)
     except:
         pass
 
-    final_report = ""
-    found_any = False
+    final_msg = ""
+    found = False
 
     for part in PART_NUMBERS:
         print(f"\n🔍 Checking {part}")
@@ -98,31 +114,30 @@ def check_stock():
 
         stores = data.get('body', {}).get('content', {}).get('pickupMessage', {}).get('stores', [])
 
-        report = f"\n📦 {part}\n"
+        msg = f"\n📦 {part}\n"
 
-        for store in stores:
-            name = store.get("storeName", "Unknown")
-            avail = store.get("partsAvailability", {}).get(part, {})
+        for s in stores:
+            name = s.get("storeName", "Unknown")
+            avail = s.get("partsAvailability", {}).get(part, {})
             status = avail.get("pickupDisplay")
             quote = avail.get("pickupSearchQuote", "-")
 
             if status == "available":
-                found_any = True
-                report += f"✅ {name}: {quote}\n"
+                found = True
+                msg += f"✅ {name}: {quote}\n"
             else:
-                report += f"⚪ {name}: {quote}\n"
+                msg += f"⚪ {name}: {quote}\n"
 
-        print(report)
-        final_report += report
+        print(msg)
+        final_msg += msg
 
-    if found_any:
-        print("🚨 Found stock → sending LINE")
-        send_line_bot("🚨 มีของแล้ว!\n" + final_report)
-    else:
-        print("⚪ No stock (no notification sent)")
+    # 👉 DEBUG MODE: ส่งเสมอ (เอาไว้เทสก่อน)
+    send_line_bot("🤖 BOT RUNNING\n" + final_msg)
 
-# =========================
-# ENTRY
-# =========================
+    # 👉 PRODUCTION MODE (เปิดใช้แทนด้านบนเมื่อมั่นใจแล้ว)
+    # if found:
+    #     send_line_bot("🚨 มีของ!\n" + final_msg)
+
+
 if __name__ == "__main__":
-    check_stock()
+    main()
