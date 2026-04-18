@@ -4,21 +4,20 @@ import requests
 import random
 import os
 from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 
 # ==========================================
-# CONFIGURATION (ดึงจาก GitHub Secrets)
+# CONFIGURATION
 # ==========================================
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_USER_ID = os.getenv("LINE_USER_ID")
-
 PART_NUMBER = "MU9D3TH/A"
 ZIP_CODE = "10330"
 
 def send_line_bot(message):
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_USER_ID:
-        print("❌ Error: Missing LINE API configuration.")
+        print("❌ Missing LINE configuration")
         return
-
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
         "Content-Type": "application/json",
@@ -29,37 +28,47 @@ def send_line_bot(message):
         "messages": [{"type": "text", "text": message}]
     }
     try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
-        if response.status_code == 200:
-            print(f"✅ LINE Bot: ส่งข้อความสำเร็จ")
-        else:
-            print(f"❌ LINE Bot Error: {response.status_code} - {response.text}")
+        requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
     except Exception as e:
-        print(f"⚠️ ไม่สามารถเชื่อมต่อกับ LINE API ได้: {e}")
+        print(f"⚠️ LINE Error: {e}")
 
 def check_stock_and_report():
     with sync_playwright() as p:
-        print(f"--- [{time.strftime('%H:%M:%S')}] เริ่มตรวจสอบสต็อก Apple Store ---")
+        print(f"--- [{time.strftime('%H:%M:%S')}] Starting Stealth Check ---")
         
-        browser = p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled", "--no-sandbox"])
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        # ใช้ Browser ปกติ (ไม่ใช่ Headless แบบโต้งๆ)
+        browser = p.chromium.launch(headless=True)
         
-        api_url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?parts.0={PART_NUMBER}&location={ZIP_CODE}"
-        
-        try:
-            # 1. Landing (พรางตัว)
-            page.goto("https://www.apple.com/th-edu/shop/buy-mac/mac-mini", wait_until="domcontentloaded", timeout=30000)
-            time.sleep(random.uniform(2, 3))
+        # สุ่ม User-Agent เพื่อพรางตัว
+        user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        ]
 
-            # 2. ดึงข้อมูลสต็อก
-            response = page.goto(api_url, wait_until="domcontentloaded", timeout=20000)
-            
+        context = browser.new_context(
+            user_agent=random.choice(user_agents),
+            viewport={'width': 1920, 'height': 1080}
+        )
+        
+        page = context.new_page()
+        # ใช้ Stealth Mode เพื่อลบตัวแปรที่บ่งบอกว่าเป็นบอท
+        stealth_sync(page)
+
+        try:
+            # Step 1: เข้าหน้าเว็บหลักก่อน เพื่อหลอกว่าเราเป็นคนเข้ามาดูสินค้าจริงๆ
+            print("🔗 Visiting Apple Store page...")
+            page.goto("https://www.apple.com/th-edu/shop/buy-mac/mac-mini", wait_until="networkidle")
+            time.sleep(random.uniform(5, 10)) # รอเหมือนคนกำลังอ่านหน้าเว็บ
+
+            # Step 2: เรียก API ข้อมูลสต็อก
+            api_url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?parts.0={PART_NUMBER}&location={ZIP_CODE}"
+            print("📡 Fetching stock data...")
+            response = page.goto(api_url)
+
             if response.status == 541:
-                send_line_bot("🚨 บอทถูกบล็อก (Error 541): Apple ตรวจพบการเข้าถึงผิดปกติ")
+                print("🚨 Error 541: Still blocked by Apple.")
+                # ถ้ายังโดนบล็อก อาจพิจารณาส่งแจ้งเตือนเข้า LINE แค่วันละครั้งพอ จะได้ไม่รบกวน
                 return
 
             raw_text = page.inner_text("body")
@@ -70,13 +79,12 @@ def check_stock_and_report():
             stores = data.get('body', {}).get('content', {}).get('pickupMessage', {}).get('stores', [])
             
             found_any = False
-            report_msg = f"🤖 รายงานสถานะสินค้า\nรหัส: {PART_NUMBER}\nเวลา: {time.strftime('%H:%M')}\n"
-            report_msg += "--------------------------\n"
-
+            report_msg = f"🤖 รายงานสต็อก {PART_NUMBER}\n"
+            
             for store in stores:
                 name = store.get('storeName', '')
                 avail = store.get('partsAvailability', {}).get(PART_NUMBER, {})
-                status = avail.get('pickupDisplay') 
+                status = avail.get('pickupDisplay')
                 quote = avail.get('pickupSearchQuote', 'ไม่มีข้อมูล')
 
                 if status == "available":
@@ -86,15 +94,13 @@ def check_stock_and_report():
                     report_msg += f"⚪ {name}: {quote}\n"
 
             if found_any:
-                report_msg = "🚨 [พบสินค้ามีของ!] 🚨\n" + report_msg
-            
-            send_line_bot(report_msg)
-            print("--- ตรวจสอบเรียบร้อยและส่ง LINE แล้ว ---")
+                send_line_bot("🚨 [พบสินค้า!] 🚨\n" + report_msg)
+                print("✅ Found stock! Message sent.")
+            else:
+                print("⚪ Out of stock. No message sent to avoid spam.")
 
         except Exception as e:
-            err_text = f"⚠️ บอทเกิดข้อผิดพลาด: {str(e)}"
-            print(err_text)
-            send_line_bot(err_text)
+            print(f"⚠️ Error: {e}")
         finally:
             browser.close()
 
