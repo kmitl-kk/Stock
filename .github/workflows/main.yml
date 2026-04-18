@@ -2,7 +2,7 @@ name: Apple Stock Checker
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # ทุก 30 นาที
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -14,19 +14,17 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
       - name: Run bot
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          PROXY: ${{ secrets.PROXY }}   # 🔥 สำคัญ
         run: python main.py
