@@ -8,8 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # ใช้ Container ของ Playwright โดยตรงเพื่อตัดปัญหาเรื่อง Library ในเครื่อง GitHub
-    container: mcr.microsoft.com/playwright/python:v1.42.0-jammy 
+    container: mcr.microsoft.com/playwright/python:v1.42.0-jammy
 
     steps:
       - name: Checkout code
