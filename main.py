@@ -16,7 +16,7 @@ PROXY_SERVER = os.getenv("PROXY_SERVER")
 PROXY_USERNAME = os.getenv("PROXY_USERNAME")
 PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 
-PART_NUMBER = "MDH74TH/A"
+PART_NUMBER = "MU9D3TH/A"
 ZIP_CODE = "10330"
 
 def send_line_bot(message):
@@ -40,7 +40,7 @@ def send_line_bot(message):
         print(f"⚠️ ไม่สามารถเชื่อมต่อกับ LINE API ได้: {e}")
 
 def check_stock_and_report():
-    """เช็คสต็อกและส่งสรุปผลเข้า LINE ทันที"""
+    """เช็คสต็อกและส่งสรุปผลเข้า LINE"""
     with sync_playwright() as p:
         print(f"--- [{time.strftime('%H:%M:%S')}] เริ่มตรวจสอบสต็อกผ่าน Proxy ---")
         
@@ -93,7 +93,7 @@ def check_stock_and_report():
             for store in stores:
                 name = store.get('storeName', '')
                 avail = store.get('partsAvailability', {}).get(PART_NUMBER, {})
-                status = avail.get('pickupDisplay') # 'available' หรือ 'unavailable'
+                status = avail.get('pickupDisplay') 
                 quote = avail.get('pickupSearchQuote', 'ไม่มีข้อมูล')
 
                 if status == "available":
@@ -102,12 +102,18 @@ def check_stock_and_report():
                 else:
                     report_msg += f"⚪ {name}: {quote}\n"
 
+            # === ส่วนของการส่งแจ้งเตือน ===
             if found_any:
-                report_msg = "🚨 [พบสินค้ามีของ!] 🚨\n" + report_msg
-            
-            # ส่งผลลัพธ์เข้า LINE เสมอ ไม่ว่าจะมีของหรือไม่มี
-            send_line_bot(report_msg)
-            print("--- ตรวจสอบเรียบร้อยและส่ง LINE แล้ว ---")
+                # กรณี "มีของ" -> ส่งแจ้งเตือนรัวๆ 10 รอบ
+                alert_msg = "🚨 [พบสินค้ามีของ!] 🚨\n" + report_msg
+                print(f"🔥 พบของ! กำลังส่งแจ้งเตือน 10 ครั้ง...")
+                for i in range(10):
+                    send_line_bot(alert_msg)
+                    time.sleep(1) # รอ 1 วินาทีระหว่างส่ง
+            else:
+                # กรณี "ไม่มีของ" -> ส่งแจ้งเตือนรอบเดียวปกติ
+                send_line_bot(report_msg)
+                print("--- ไม่มีของ ตรวจสอบเรียบร้อยและส่งรายงานปกติแล้ว ---")
 
         except Exception as e:
             err_text = f"⚠️ บอทเกิดข้อผิดพลาด: {str(e)}"
@@ -118,3 +124,4 @@ def check_stock_and_report():
 
 if __name__ == "__main__":
     check_stock_and_report()
+    
