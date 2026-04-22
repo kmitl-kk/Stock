@@ -15,7 +15,7 @@ PROXY_SERVER = os.getenv("PROXY_SERVER")
 PROXY_USERNAME = os.getenv("PROXY_USERNAME")
 PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 
-PART_NUMBER = "MU9D3TH/A"
+PART_NUMBER = "MDH74TH/A"
 ZIP_CODE = "10330"
 
 def send_line_bot(message):
