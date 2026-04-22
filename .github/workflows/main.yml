@@ -2,7 +2,7 @@ name: Apple Stock Checker
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # สั่งรันทุกๆ 30 นาที (เพื่อประหยัดโควต้า Proxy ฟรี)
+    - cron: '*/15 * * * *'  # สั่งรันทุกๆ 30 นาที (เพื่อประหยัดโควต้า Proxy ฟรี)
   workflow_dispatch:       # ให้มีปุ่มกดรันเองได้ด้วย
 
 jobs:
