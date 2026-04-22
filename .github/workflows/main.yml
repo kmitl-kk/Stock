@@ -2,30 +2,32 @@ name: Apple Stock Checker
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
-  workflow_dispatch:
+    - cron: '*/30 * * * *'  # สั่งรันทุกๆ 30 นาที (เพื่อประหยัดโควต้า Proxy ฟรี)
+  workflow_dispatch:       # ให้มีปุ่มกดรันเองได้ด้วย
 
 jobs:
-  run:
+  check-stock:
     runs-on: ubuntu-latest
-
-    concurrency:
-      group: apple-stock
-      cancel-in-progress: true
-
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
-
-      - run: pip install -r requirements.txt 
-      - run: playwright install chromium
-
-      - name: Run bot
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests playwright
+          playwright install chromium
+          
+      - name: Run Script
         env:
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
-          PROXY: ${{ secrets.PROXY }}   # 🔥 สำคัญ
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          PROXY_SERVER: ${{ secrets.PROXY_SERVER }}
+          PROXY_USERNAME: ${{ secrets.PROXY_USERNAME }}
+          PROXY_PASSWORD: ${{ secrets.PROXY_PASSWORD }}
         run: python main.py
