@@ -16,8 +16,8 @@ PROXY_SERVER = os.getenv("PROXY_SERVER")
 PROXY_USERNAME = os.getenv("PROXY_USERNAME")
 PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 
-# ข้อมูลสินค้าที่ต้องการให้แสดงใน LINE
-PART_NUMBER = "MU9D3TH/A"
+# ข้อมูลสินค้าที่ต้องการให้แสดงใน LINE (เพิ่มรหัสที่ต้องการเช็คทั้งหมด)
+PART_NUMBERS = ["MU9D3TH/A", "MU9E3TH/A", "MCYT4TH/A", "MCX44TH/A"]
 ZIP_CODE = "10330"
 PRODUCT_NAME = "Mac mini (Education)"
 PRODUCT_IMAGE_URL = "https://store.storeimages.cdn-apple.com/8756/as-images.apple.com/is/mac-mini-hero-202410_FMT_WHH?wid=904&hei=840&fmt=jpeg&qlt=90&.v=1727976935105" # ลิงก์รูป Mac mini จากเว็บ Apple
@@ -94,7 +94,9 @@ def check_stock_and_report():
         page = context.new_page()
         page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
-        api_url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?parts.0={PART_NUMBER}&location={ZIP_CODE}"
+        # จัดเตรียม API URL สำหรับเช็คหลายรหัสพร้อมกัน
+        parts_query = "&".join([f"parts.{i}={part}" for i, part in enumerate(PART_NUMBERS)])
+        api_url = f"https://www.apple.com/th-edu/shop/fulfillment-messages?{parts_query}&location={ZIP_CODE}"
         
         try:
             # 1. Landing (พรางตัว)
@@ -120,22 +122,27 @@ def check_stock_and_report():
             # โครงสร้างข้อความแบบใหม่
             report_msg = f"🤖 รายงานสถานะสินค้า\n"
             report_msg += f"สินค้า: {PRODUCT_NAME}\n"
-            report_msg += f"รหัส: {PART_NUMBER}\n"
+            report_msg += f"รหัส: {', '.join(PART_NUMBERS)}\n"
             report_msg += f"เวลา: {time.strftime('%H:%M')}\n"
             report_msg += f"🌐 Proxy IP: {display_ip}\n"
             report_msg += "--------------------------\n"
 
             for store in stores:
                 name = store.get('storeName', '')
-                avail = store.get('partsAvailability', {}).get(PART_NUMBER, {})
-                status = avail.get('pickupDisplay') 
-                quote = avail.get('pickupSearchQuote', 'ไม่มีข้อมูล')
+                report_msg += f"📍 สาขา: {name}\n"
+                
+                # ลูปเพื่อเช็คสถานะของแต่ละรหัสสินค้าในสาขานั้นๆ
+                for part in PART_NUMBERS:
+                    avail = store.get('partsAvailability', {}).get(part, {})
+                    status = avail.get('pickupDisplay') 
+                    quote = avail.get('pickupSearchQuote', 'ไม่มีข้อมูล')
 
-                if status == "available":
-                    found_any = True
-                    report_msg += f"✅ {name}: {quote}\n"
-                else:
-                    report_msg += f"⚪ {name}: {quote}\n"
+                    if status == "available":
+                        found_any = True
+                        report_msg += f"✅ {part}: {quote}\n"
+                    else:
+                        report_msg += f"⚪ {part}: {quote}\n"
+                report_msg += "--------------------------\n"
 
             # === ส่วนของการส่งแจ้งเตือน ===
             if found_any:
